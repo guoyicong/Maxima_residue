@@ -1,88 +1,33 @@
 residue_m(_f, _z, _a) := block(
+ratprint: false,
 [res],
 res: residue(_f, _z, _a),
 if (notequal(res, 0))
     then return (res)
     else block(
         [],
-        res: residue_pf(_f, _z, _a),
-        if (notequal(res, 0))
-            then return (res)
-            else block(
-            [],
-            res: residue_lim(_f, _z, _a),
-            if (notequal(res, 0))
-            then return (res)
-            else return ("the calculation has failed")
-)));
+        res: residue_simple(_f, _z, _a),
+        if (not(member(infinity, list(res)))) and (not(member(und, list(res))))
+           then return(res)
+        else return ("the calculation has failed")
+));
 
 
-factorC(_f,_z):=block(
-[s,n,m,fp,j],
-fp:1,
-ss:args(tpsmult(_f,_z)),
-n: length(ss),
-s:makelist(ss[i][1],i,n),
-m:mult,
-for j:1 thru n do  
-    fp:fp*(_z-(rhs(s[j])))^m[j],
-    fp:fp*divide(_f,fp)[1],
-fp
-);
-
-partfracC(_f,_z):=block(
-[n,d,fd],
-n:num(_f),
-d:denom(_f),
-fd:factorC(d,_z),
-partfrac(n/fd,_z)
-);
-
-residue_pf(_f,_z,_a):=block(
-[pfC,n,j,res],
-pfC:partfracC(_f,_z),
-n:length(pfC),
-res:0,
-for j:1 thru n do
-   if (  not freeof((_z-_a),denom(part(pfC,j)))  and  
-          hipow(expand(denom(part(pfC,j))),_z)=1  ) then
-		  res:(_z-_a)*part(pfC,j),
-		  res
-);
 
 residue_lim(_f,_z,_a):=block(
-[j,res,nmax,big],
+[j,res,nmax,big,arg],
 big:1000000,
 nmax:10,
 for j:1 thru nmax do (
     display(j),
     res:limit(diff((_z-_a)^j*_f,_z,j-1),_z,_a)/(j-1)!,
-     if (abs(res)<big) then return(res)
-	)
+    arg:args(list(res)),
+    if (not(member(infinity, arg)) 
+       and not(member(und, arg)) 
+       and(abs(res)<big))
+    then return(res)),
+return(und)
 );
 
-define_variable(mult, [], list);
 
-tpsmult(_f,_z):=block(
-[s,d,nroots,m1],
-s:to_poly_solve(_f,_z),
-nroots:length(s),
-mult:[],
-for j:1 thru nroots do (
-m1: [rootmult(_f,_z,rhs(part(s,j,1)))],
-mult: append(mult, m1)
-),
-s
-);
-
-rootmult(_f,_z,_a):=block(
-[d,val,m,mm],
-m:1,
-d:divide(_f,(_z-_a)),
-val:subst(_z=_a,part(d,1)),
-if is(equal(val,0)) then (
-	 mm:rootmult(part(d,1),_z,_a),
-	 m:m+mm
-	 ),
-m
-);
+residue_simple(_f, _z, _a) := limit((_z - _a)*_f, _z, _a);
