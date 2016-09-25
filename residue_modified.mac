@@ -4,32 +4,53 @@ residue_m(_f, _z, _a) := block(
 ratprint: false,
 [res, lim],
 lim: limit(abs(_f), _z, _a),
-/* if we have a pole of order k at _a, we use residue_lim() */
-if is(member(infinity, list(lim))) or is(member(inf, list(lim))) or is(member(minf, list(lim)))
-  then res: residue_lim(_f, _z, _a)
-  /* else if we have an essential singularity at _a, we use residue_powerseries() */
-  else if (is(member(ind, list(lim)))) or (is(member(und, list(lim))))
-    then res: residue_powerseries(_f, _z, _a)
-    /* else we use the original residue() */
-    else
-    res: residue(_f, _z, _a),
-return(res)
+/* if we have an essential singularity at _a, we use residue_powerseries() */
+if undefinedp(lim)
+  then res: residue_powerseries(_f, _z, _a)
+  /* else we try the original residue() */
+  else block(
+    [], 
+    lis: errcatch(residue(_f, _z, _a)),
+    /* if residue() fails, we use residue_lim */
+    if emptyp(lis)
+      then res: residue_lim(_f, _z, _a)
+      else block(
+        [],
+        res: pop(lis),
+        if is(equal(res, 0)) and infinitep(lim)
+          then res: residue_lim(_f, _z, _a))),
+res
+);
+
+
+infinitep(_e) := block(
+[],
+if atom(_e)
+  then return(is(equal(_e, infinity) or equal(_e, inf) or equal(_e, minf)))
+  else return(is(member(infinity, args(_e)) or member(inf, args(_e)) or member(minf, args(_e))))
+);
+
+
+undefinedp(_e) := block(
+[],
+if atom(_e)
+  then return(is(member(ind, list(_e)) or member(und, list(_e))))
+  else return(is(member(ind, args(_e)) or member(und, args(_e))))
 );
 
 
 /* largest order to check */
-define_variable(nmax, 10, integer);
+define_variable(residue_max_pole_order, 10, integer);
 
 
 residue_lim(_f,_z,_a):=block(
-[j,res,big,l],
-big:1000000,
-l:for j:1 thru nmax do (
-    /* display(j), */ 
+[j,res,l],
+l:for j:1 thru residue_max_pole_order do (
+    /* display(j), */
     res:limit(diff((_z-_a)^j*_f,_z,j-1),_z,_a)/(j-1)!,
-    if abs(res)<big then return(res)),
+    if not infinitep(res) then return(res)),
 if is(equal(l, done)) 
-  then return("The pole is of large order, please check and reset nmax and try again"),
+  then return("The pole is of large order, please check and reset residue_max_pole_order and try again"),
 return(l)
 );
 
