@@ -16,7 +16,7 @@ if undefinedp(lim)
       then res: residue_lim(_f, _z, _a)
       else block(
         [],
-        res: pop(lis),
+        res: first(lis),
         if is(equal(res, 0)) and infinitep(lim)
           then res: residue_lim(_f, _z, _a))),
 res
@@ -66,4 +66,25 @@ nn:solve(n=-1),
 ff:is(round(part(nn,1,2))=part(nn,1,2)), /* ?? integer that gives 1/(z-a) term ??*/
 if (ff) then ref:(_z-_a)*subst(nn,ai),
 ref
+);
+
+
+expp(_f) := is(equal(op(_f), "^")) and is(equal(first(args(_f)), %e));
+
+
+residue_taylor_single_term(_f, _z, _a) := block(
+[list_of_ops, optr, res],
+list_of_ops: [sin, cos, tan],
+if expp(_f)
+  then optr: exp
+  else optr: op(_f),
+if is(member(optr, list_of_ops) or equal(optr, exp))
+    then block(
+    [arg, s, sz],
+    arg: last(args(_f)),
+    s: taylor(optr(_z), _z, _a, 10),
+    sz: subst(_z = arg, s),
+    res: coeff(sz, _z-_a, -1)
+    ),
+res
 );
