@@ -45,9 +45,9 @@ define_variable(residue_max_pole_order, 10, integer);
 
 residue_lim(_f,_z,_a):=block(
 [j,res,l],
-l:for j:1 thru residue_max_pole_order do (
+l: for j: 1 thru residue_max_pole_order do (
     /* display(j), */
-    res:limit(diff((_z-_a)^j*_f,_z,j-1),_z,_a)/(j-1)!,
+    res: limit(diff((_z-_a)^j*_f,_z,j-1),_z,_a)/(j-1)!,
     if not infinitep(res) then return(res)),
 if is(equal(l, done)) 
   then return("The pole is of large order, please check and reset residue_max_pole_order and try again"),
@@ -72,19 +72,65 @@ ref
 expp(_f) := is(equal(op(_f), "^")) and is(equal(first(args(_f)), %e));
 
 
-residue_taylor_single_term(_f, _z, _a) := block(
-[list_of_ops, optr, res],
+residue_valid_op_p(_f, _z) := block(
+[list_of_ops],
 list_of_ops: [sin, cos, tan],
-if expp(_f)
-  then optr: exp
-  else optr: op(_f),
-if is(member(optr, list_of_ops) or equal(optr, exp))
-    then block(
-    [arg, s, sz],
-    arg: last(args(_f)),
-    s: taylor(optr(_z), _z, _a, 10),
-    sz: subst(_z = arg, s),
-    res: coeff(sz, _z-_a, -1)
-    ),
-res
+constantp(_f) or polynomialp(_f, [_z]) or expp(_f) or is(member(op(_f), list_of_ops)) 
+);
+
+
+residue_taylor_expand(_f, _z, _a, optr) := block(
+[arg, s, sz],
+arg: last(args(_f)),
+s: taylor(optr(_z), _z, _a, 10),
+sz: subst(_z = arg, s)
+);
+
+
+residue_taylor_one_term(_f, _z, _a) := block(
+[optr, res],
+if constantp(_f) or polynomialp(_f, [_z])
+  then return(taylor(_f, _z, _a, 10))
+  else block(
+    optr: op(_f),
+    if residue_valid_op_p(_f, _z)
+      then block(
+      [],
+      if is(equal(optr, "^"))
+        then optr: exp,
+      res: residue_taylor_expand(_f, _z, _a, optr))
+      else res: "failed")
+);
+
+
+residue_taylor_multi_terms(_f, _z, _a) := block(
+[product],
+product: 1,
+for i: 1 thru length(args(_f)) do (
+          term: part(_f, i),
+          o: op(term),
+          product: product * residue_taylor_one_term(term, _z, _a))
+);
+
+
+residue_taylor(_f, _z, _a) := block(
+[temp, res],
+if residue_valid_op_p(_f, _z)
+  then res: coeff(residue_taylor_one_term(_f, _z, _a), _z-_a, -1)
+  else block(
+    [optr],
+    optr: op(_f),
+    if is(equal(optr, "*") or equal(optr, "/"))
+      then block(
+        [product],
+        product: 1,
+        num: num(_f),
+        denom: denom(_f),
+        if residue_valid_op_p(num, _z)
+          then product: product * residue_taylor_one_term(num, _z, _a)
+          else product: product * residue_taylor_multi_terms(num, _z, _a),
+        if residue_valid_op_p(denom, _z)
+          then product: product * (1/residue_taylor_one_term(denom, _z, _a))
+          else product: product * (1/residue_taylor_multi_terms(denom, _z, _a)),
+        res: coeff(expand(product), _z-_a, -1)))
 );
