@@ -80,10 +80,15 @@ constantp(_f) or polynomialp(_f, [_z]) or expp(_f) or is(member(op(_f), list_of_
 
 
 residue_taylor_expand(_f, _z, _a, optr) := block(
-[arg, s, sz],
+[arg, denom],
 arg: last(args(_f)),
-s: taylor(optr(_z), _z, _a, 10),
-sz: subst(_z = arg, s)
+denom: denom(arg),
+if polynomialp(denom, [_z]) and is(hipow(denom, _z)<=1)
+  then block(
+  [s, sz],
+  s: taylor(optr(_z), _z, 0, 10),
+  sz: subst(_z = arg, s)
+  )
 );
 
 
@@ -108,8 +113,8 @@ residue_taylor_multi_terms(_f, _z, _a) := block(
 product: 1,
 for i: 1 thru length(args(_f)) do (
           term: part(_f, i),
-          o: op(term),
-          product: product * residue_taylor_one_term(term, _z, _a))
+          product: product * residue_taylor_one_term(term, _z, _a)),
+product
 );
 
 
