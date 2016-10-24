@@ -6,18 +6,19 @@
   r, for some r.
 
   The algorithm is based on Theorem 7.16 and 7.17 in Complex Analysis
-  for Mathematics and Engineering by Mathews and Howell.
+  for Mathematics and Engineering by Mathews and Howell. The decision
+  was made not to take the absolute value so that certain problems
+  could be avoided.
   ----------------------------------------------------------------- */
-
 residue_m(_f, _z, _a) := block(
   ratprint: false,
   [res, lim],
-  lim: limitC(absC(_f), _z, _a),
-  /* if the limit is infinite, we have a pole of order k */
+  lim: limit_c(_f, _z, _a),
+  /* if the limit is infinite, _f has a pole of order k at _a */
   if infinitep(lim)
     then res: residue_lim(_f, _z, _a)
     else (
-      /* if the limit is undefined, we have an essential singularity */
+      /* if the limit is undefined, _f has an essential singularity */
       if undefinedp(lim)
         then res: residue_taylor(_f, _z, _a)
         /* otherwise _f is analytic at _a */
@@ -27,27 +28,31 @@ residue_m(_f, _z, _a) := block(
 
 
 
-absC(_e):= block(
-  [state, res],
-  state: radexpand,
-  radexpand: false,
-  res: sqrt(realpart(_e)^2 + imagpart(_e)^2),
-  radexpand: state,
-  res
-);
+/* ------------------------------------------------------------------
+  limit_c computes the limit of _f as _z approaches _a from two directions
+  (along the horizontal and vertical lines) and if the results agree, it
+  returns the result; else it outputs undefined.
 
-
-limitC(_f, _z, _a) := block(
+  This is a very primitive attempt at calculating the complex limit. It
+  works in most cases for the purpose of computing residue.
+  ----------------------------------------------------------------- */
+limit_c(_f, _z, _a) := block(
   [t, rlim, ilim],
   declare([t, _z], [real, complex]),
   rlim: limit(subst(_z=_a+t, _f), t, 0),
   ilim: limit(subst(_z=_a+%i*t, _f), t, 0),
+  /* the infinite case needs to be handled separately */
   if is(equal(rlim, ilim)) or (infinitep(rlim) and infinitep(ilim))
     then return(rlim)
+    /* if the limits don't agree, output undefined */
     else return("und")
 );
 
 
+/* ------------------------------------------------------------------
+  infinitep returns true if expression _e is, or contains, infinity, 
+  inf, or minf, otherwise it returns false.
+  ----------------------------------------------------------------- */
 infinitep(_e) := block(
   if mapatom(_e)
     then return(is(equal(_e, infinity) or equal(_e, inf) or equal(_e, minf)))
@@ -55,103 +60,219 @@ infinitep(_e) := block(
 );
 
 
+
+/* ------------------------------------------------------------------
+  undefinedp returns true if expression _e is the string "und",
+  otherwise it returns false. 
+
+  This predicate function is to be used on the output of limit_c.
+  ----------------------------------------------------------------- */
 undefinedp(_e) := is(equal("und", _e));
 
 
-/* largest order to check */
+
+/* ------------------------------------------------------------------
+  residue_max_pole_order defines the largest order to check when
+  calculating the residue at a pole of order k. 
+
+  The user can reset the value as they deem necessary.
+  ----------------------------------------------------------------- */
 define_variable(residue_max_pole_order, 10, integer);
 
 
-residue_lim(_f,_z,_a):=block(
+/* ------------------------------------------------------------------
+  residue_lim computes the residue at a pole of order k.
+
+  It checks pole order up to residue_max_pole_order. Users can reset
+  the value.
+  ----------------------------------------------------------------- */
+residue_lim(_f,_z,_a) := block(
   [j,res,l],
   l: for j: 1 thru residue_max_pole_order do (
+    /* use residue limit formula */
     res: limit(diff((_z-_a)^j*_f,_z,j-1),_z,_a)/(j-1)!,
     if not infinitep(res) then return(res)),
-  if is(equal(l, done)) 
-    then return("The pole is of large order, please check and reset residue_max_pole_order and try again"),
+  /* if the loop completes without finding the result */
+  if is(equal(l, done))
+    then return(sconcat("The pole is of large order, please check and",
+                        " reset residue_max_pole_order and try again")),
   return(l)
 );
 
 
+
+/* ------------------------------------------------------------------
+  residue_taylor_hipow keeps track of the highest power (in absolute
+  value) of the terms in the taylor/laurent series expansions computed.
+
+  This value is needed to avoid certain cases where the term 1/(_z-_a)
+  is absent in the expansion of the f(z)g(z) due to insufficient
+  terms in the expansions of f(z) or g(z).
+  ----------------------------------------------------------------- */
 define_variable(residue_taylor_hipow, 10, integer);
 
 
-expp(_f) := is(equal(op(_f), "^")) and is(equal(first(args(_f)), %e));
 
+/* ------------------------------------------------------------------
+  update_hipow updates the value of residue_taylor_hipow.
 
-residue_valid_op_p(_f, _z) := block(
-  [list_of_ops],
-  list_of_ops: [sin, cos, tan],
-  constantp(_f) or polynomialp(_f, [_z]) or expp(_f) or is(member(op(_f), list_of_ops)) 
+  It finds the highest power in absolute value of _z in _e, and if it
+  is greater than residue_taylor_hipow, sets the value of residue_
+  taylor_hipow to it.
+  ----------------------------------------------------------------- */
+update_hipow(_e, _z) := block(
+  residue_taylor_hipow: max(residue_taylor_hipow,
+                            hipow(_e, _z)+1,  
+                            abs(lopow(_e, _z))+1) 
 );
 
 
+/* ------------------------------------------------------------------
+  expp returns true if function _f is a natural base exponential
+  function, otherwise false.
+  ----------------------------------------------------------------- */
+expp(_f) := is(equal(op(_f), "^")) and is(equal(first(args(_f)), %e));
+
+
+/* ------------------------------------------------------------------
+  residue_valid_op_p returns true if function _f is among the types
+  of functions specified below, otherwise false.
+
+  funtion types:
+        constant functions, polynomials, sin(), cos(), tan(), exp()
+  ----------------------------------------------------------------- */
+residue_valid_op_p(_f, _z) := block(
+  [list_of_ops],
+  list_of_ops: [sin, cos, tan],
+  constantp(_f) or polynomialp(_f, [_z]) or expp(_f) or 
+  is(member(op(_f), list_of_ops)) 
+);
+
+
+/* ------------------------------------------------------------------
+  monomial_power_p returns true if expression _e is a monomial of _z
+  raised to a power, otherwise false.
+  ----------------------------------------------------------------- */
+monomial_power_p(_e, _z) := block(
+  if mapatom(_e)
+    then return(true)
+    else(
+      if is(equal(op(_e), "^"))
+      then return(monomial_power_p(part(_e, 1), _z))
+      else return(is(hipow(ratexpand(_e), _z)<=1)))
+);
+
+
+/* ------------------------------------------------------------------
+  residue_taylor_expand returns the laurent series expansion of
+  function _f(_z) centered at _a.
+
+  optr is the major operator in the function _f. It should be one of
+  sin, cos, tan, or exp.
+
+  The exp() case should be handled by residue_taylor_exp, which will
+  process the input first before passing it to residue_taylor_expand.
+  ----------------------------------------------------------------- */
 residue_taylor_expand(_f, _z, _a, optr) := block(
   [arg, denom, res],
   arg: last(args(_f)),
   denom: denom(arg),
-  if polynomialp(denom, [_z]) and is(hipow(denom, _z)<=2) /* Do we really wanna go into cases other than monomial denominators? */
+  if polynomialp(denom, [_z]) and monomial_power_p(denom, _z)
     then block(
     [s],
     s: taylor(optr(_z), _z, 0, residue_taylor_hipow),
+    /* find the laurent series by substitution */
     res: subst(_z = arg, s),
-    residue_taylor_hipow: max(residue_taylor_hipow, 
-                              hipow(res, _z)+1,  
-                              abs(lopow(res, _z))+1)), 
+    update_hipow(res, _z)),
   res
 );
 
 
+/* ------------------------------------------------------------------
+  residue_taylor_exp_helper returns true if _f(_z) can be decomposed
+  into a sum of several functions of _z, each of which being a
+  polynomial of _z, or the inverse of a polynomial of _z; otherwise
+  it returns false.
+  ----------------------------------------------------------------- */
 residue_taylor_exp_helper(_f, _z) := block(
   [res],
   res: true,
   for i:1 thru length(args(_f)) do(
     term: part(_f, i),
-    if mapatom(term) and not is(equal(term, _z))
-      then res: false,
-    if listp(term) and not is(member(_z, term))
+    if not (polynomialp(term, [_z]) or polynomalp(denom(term), [_z]))
       then res: false),
   return(res)
 );
 
 
+/* ------------------------------------------------------------------
+  residue_taylor_exp computes the laurent series expansion of the
+  function _f(_z) centered at _a, where _f is a natural exponential
+  function.
+  ----------------------------------------------------------------- */
 residue_taylor_exp(_f, _z, _a) := block(
   [arg, res],
   arg: last(args(_f)),
+  /* if _f can be broken into a product of several exp(), then each */
+  /* of them should be handled separately be residue_taylor_exp */
   if not mapatom(arg) and is(equal(op(arg), "+"))
     then (
-      if residue_taylor_exp_helper(_f, _z)
-        then res: ratexpand(apply("*", maplist(lambda([x], residue_taylor_exp(exp(x), _z, _a)), arg))))
+      if residue_taylor_exp_helper(arg, _z)
+        /* compute the laurent series expansions of each part, then */
+        /* multiply them together for the final result */
+        then res: ratexpand(apply("*", 
+                                  maplist(lambda([x], residue_taylor_exp(exp(x), _z, _a)), 
+                                          arg))))
+    /* otherwise _f is passed to residue_taylor_expand */
     else res: residue_taylor_expand(_f, _z, _a, exp),
   res
 );
 
 
+/* ------------------------------------------------------------------
+  residue_taylor_helper computes the laurent series expansion of the
+  function _f(_z) centered at _a.
+  ----------------------------------------------------------------- */
 residue_taylor_helper(_f, _z, _a) := block(
   [optr, res],
+  /* if _f might be handled directly */
   if residue_valid_op_p(_f, _z)
     then (
       if constantp(_f) or polynomialp(_f, [_z])
+        /* for contant functions and polynomials, simply */
+        /* compute the taylor series expansion */
         then block(
           res: taylor(_f, _z, _a, residue_taylor_hipow),
-          residue_taylor_hipow: max(residue_taylor_hipow,
-                                hipow(res, _z)+1,  
-                                abs(lopow(res, _z))+1)) 
+          update_hipow(res, _z)) 
       else block(
         optr: op(_f),
         if is(equal(optr, "^"))
+          /* handle exp() with residue_taylor_exp */
           then res: residue_taylor_exp(_f, _z, _a)
+          /* handle sin(), cos(), tan() with residue_taylor_expand */
           else res: residue_taylor_expand(_f, _z, _a, optr)))
-    else res: ratexpand(apply("*", maplist(lambda([x], residue_taylor_helper(x, _z, _a)), _f))),
+    /* otherwise _f might be decomposed to a product of functions, */
+    /*   each of which might be handled directly */
+    else res: ratexpand(apply("*", 
+                              maplist(lambda([x], residue_taylor_helper(x, _z, _a)), 
+                                      _f))),
   res
 );
 
 
+/* ------------------------------------------------------------------
+  residue_taylor computes the residue at an essential singularity.
+
+  function _f can be one of the followings:
+          constant functions, polynomials, sin(), cos(), tan(), exp()
+    or any product/quotient combination of the above.
+  ----------------------------------------------------------------- */
 residue_taylor(_f, _z, _a) := block(
   [res],
   residue_taylor_hipow: 10,
   num: num(_f),
   denom: denom(_f),
+  /* get the taylor expansions of the nominator and the denominator */
   res: ratexpand(residue_taylor_helper(num, _z, _a)/residue_taylor_helper(denom, _z, _a)),
   res: coeff(res, _z-_a, -1)
 );
