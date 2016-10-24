@@ -1,38 +1,61 @@
-/* _f is assumed to be analytic in D_r^*(_a)for some r */
+/* ------------------------------------------------------------------
+  residue_m computes the residue in the complex plane of the function 
+  _f when the variable _z assumes the value _a.
+
+  _f should be analytic in a deleted disk centered at _a of radius
+  r, for some r.
+
+  The algorithm is based on Theorem 7.16 and 7.17 in Complex Analysis
+  for Mathematics and Engineering by Mathews and Howell.
+  ----------------------------------------------------------------- */
 
 residue_m(_f, _z, _a) := block(
-ratprint: false,
-[res, lim],
-lim: limit(abs(_f), _z, _a),
-/* if we have an essential singularity at _a, we use residue_taylor() */
-if undefinedp(lim)
-  then res: residue_taylor(_f, _z, _a)
-  /* else we try the original residue() */
-  else block(
-    lis: errcatch(residue(_f, _z, _a)),
-    /* if residue() fails, we use residue_lim */
-    if emptyp(lis)
-      then res: residue_lim(_f, _z, _a)
-      else block(
-        res: first(lis),
-        if is(equal(res, 0)) and infinitep(lim)
-          then res: residue_lim(_f, _z, _a))),
-res
+  ratprint: false,
+  [res, lim],
+  lim: limitC(absC(_f), _z, _a),
+  /* if the limit is infinite, we have a pole of order k */
+  if infinitep(lim)
+    then res: residue_lim(_f, _z, _a)
+    else (
+      /* if the limit is undefined, we have an essential singularity */
+      if undefinedp(lim)
+        then res: residue_taylor(_f, _z, _a)
+        /* otherwise _f is analytic at _a */
+        else res: 0),
+  res
+);
+
+
+
+absC(_e):= block(
+  [state, res],
+  state: radexpand,
+  radexpand: false,
+  res: sqrt(realpart(_e)^2 + imagpart(_e)^2),
+  radexpand: state,
+  res
+);
+
+
+limitC(_f, _z, _a) := block(
+  [t, rlim, ilim],
+  declare([t, _z], [real, complex]),
+  rlim: limit(subst(_z=_a+t, _f), t, 0),
+  ilim: limit(subst(_z=_a+%i*t, _f), t, 0),
+  if is(equal(rlim, ilim)) or (infinitep(rlim) and infinitep(ilim))
+    then return(rlim)
+    else return("und")
 );
 
 
 infinitep(_e) := block(
-if atom(_e)
-  then return(is(equal(_e, infinity) or equal(_e, inf) or equal(_e, minf)))
-  else return(is(member(infinity, args(_e)) or member(inf, args(_e)) or member(minf, args(_e))))
+  if mapatom(_e)
+    then return(is(equal(_e, infinity) or equal(_e, inf) or equal(_e, minf)))
+    else return(member(true, maplist('infinitep, _e)))
 );
 
 
-undefinedp(_e) := block(
-if atom(_e)
-  then return(is(member(ind, list(_e)) or member(und, list(_e))))
-  else return(is(member(ind, args(_e)) or member(und, args(_e))))
-);
+undefinedp(_e) := is(equal("und", _e));
 
 
 /* largest order to check */
@@ -40,14 +63,13 @@ define_variable(residue_max_pole_order, 10, integer);
 
 
 residue_lim(_f,_z,_a):=block(
-[j,res,l],
-l: for j: 1 thru residue_max_pole_order do (
-    /* display(j), */
+  [j,res,l],
+  l: for j: 1 thru residue_max_pole_order do (
     res: limit(diff((_z-_a)^j*_f,_z,j-1),_z,_a)/(j-1)!,
     if not infinitep(res) then return(res)),
-if is(equal(l, done)) 
-  then return("The pole is of large order, please check and reset residue_max_pole_order and try again"),
-return(l)
+  if is(equal(l, done)) 
+    then return("The pole is of large order, please check and reset residue_max_pole_order and try again"),
+  return(l)
 );
 
 
@@ -58,103 +80,78 @@ expp(_f) := is(equal(op(_f), "^")) and is(equal(first(args(_f)), %e));
 
 
 residue_valid_op_p(_f, _z) := block(
-[list_of_ops],
-list_of_ops: [sin, cos, tan],
-constantp(_f) or polynomialp(_f, [_z]) or expp(_f) or is(member(op(_f), list_of_ops)) 
+  [list_of_ops],
+  list_of_ops: [sin, cos, tan],
+  constantp(_f) or polynomialp(_f, [_z]) or expp(_f) or is(member(op(_f), list_of_ops)) 
 );
 
 
 residue_taylor_expand(_f, _z, _a, optr) := block(
-[arg, denom, res],
-arg: last(args(_f)),
-denom: denom(arg),
-if polynomialp(denom, [_z]) and is(hipow(denom, _z)<=2) /* Do we really wanna go into cases other than monomial denominators? */
-  then block(
-  [s],
-  s: taylor(optr(_z), _z, 0, residue_taylor_hipow),
-  res: subst(_z = arg, s),
-  residue_taylor_hipow: max(residue_taylor_hipow, 
-                            hipow(res, _z)+1,  
-                            abs(lopow(res, _z))+1)), 
-res
+  [arg, denom, res],
+  arg: last(args(_f)),
+  denom: denom(arg),
+  if polynomialp(denom, [_z]) and is(hipow(denom, _z)<=2) /* Do we really wanna go into cases other than monomial denominators? */
+    then block(
+    [s],
+    s: taylor(optr(_z), _z, 0, residue_taylor_hipow),
+    res: subst(_z = arg, s),
+    residue_taylor_hipow: max(residue_taylor_hipow, 
+                              hipow(res, _z)+1,  
+                              abs(lopow(res, _z))+1)), 
+  res
 );
 
 
 residue_taylor_exp_helper(_f, _z) := block(
-for i:1 thru length(args(_f)) do(
-  term: part(_f, i),
-  if atom(term) and not is(equal(term, _z))
-    then return(false),
-  if listp(term) and not is(member(_z, term))
-    then return(false),
-  return(true))
+  [res],
+  res: true,
+  for i:1 thru length(args(_f)) do(
+    term: part(_f, i),
+    if mapatom(term) and not is(equal(term, _z))
+      then res: false,
+    if listp(term) and not is(member(_z, term))
+      then res: false),
+  return(res)
 );
 
 
 residue_taylor_exp(_f, _z, _a) := block(
-[arg, res],
-arg: last(args(_f)),
-if is(equal(op(arg), "+"))
-  then (if residue_taylor_exp_helper(_f, _z)
-          then (
-            res: 1,
-            for i:1 thru length(args(arg)) do(
-              term: part(arg, i),
-              res: res * residue_taylor_expand(exp(term), _z, _a, exp)),
-            res: expand(res)))
-  else res: residue_taylor_expand(_f, _z, _a, exp),
-res
+  [arg, res],
+  arg: last(args(_f)),
+  if not mapatom(arg) and is(equal(op(arg), "+"))
+    then (
+      if residue_taylor_exp_helper(_f, _z)
+        then res: ratexpand(apply("*", maplist(lambda([x], residue_taylor_exp(exp(x), _z, _a)), arg))))
+    else res: residue_taylor_expand(_f, _z, _a, exp),
+  res
 );
 
 
-residue_taylor_one_term(_f, _z, _a) := block(
-[optr, res],
-if constantp(_f) or polynomialp(_f, [_z])
-  then block(
-    res: taylor(_f, _z, _a, residue_taylor_hipow),
-    residue_taylor_hipow: max(residue_taylor_hipow,
-                              hipow(res, _z)+1,  
-                              abs(lopow(res, _z))+1)) 
-  else block(
-    optr: op(_f),
-    if is(equal(optr, "^"))
-      then res: residue_taylor_exp(_f, _z, _a)
-      else res: residue_taylor_expand(_f, _z, _a, optr)),
-res
+residue_taylor_helper(_f, _z, _a) := block(
+  [optr, res],
+  if residue_valid_op_p(_f, _z)
+    then (
+      if constantp(_f) or polynomialp(_f, [_z])
+        then block(
+          res: taylor(_f, _z, _a, residue_taylor_hipow),
+          residue_taylor_hipow: max(residue_taylor_hipow,
+                                hipow(res, _z)+1,  
+                                abs(lopow(res, _z))+1)) 
+      else block(
+        optr: op(_f),
+        if is(equal(optr, "^"))
+          then res: residue_taylor_exp(_f, _z, _a)
+          else res: residue_taylor_expand(_f, _z, _a, optr)))
+    else res: ratexpand(apply("*", maplist(lambda([x], residue_taylor_helper(x, _z, _a)), _f))),
+  res
 );
-
-
-residue_taylor_multi_terms(_f, _z, _a) := block(
-[product],
-product: 1,
-for i: 1 thru length(args(_f)) do (
-          term: part(_f, i),
-          if residue_valid_op_p(term, _z)
-            then product: product * residue_taylor_one_term(term, _z, _a)),
-product
-);
-
 
 
 residue_taylor(_f, _z, _a) := block(
-[temp, res],
-residue_taylor_hipow: 10,
-if residue_valid_op_p(_f, _z)
-  then res: coeff(residue_taylor_one_term(_f, _z, _a), _z-_a, -1)
-  else block(
-    [optr],
-    optr: op(_f),
-    if is(equal(optr, "*") or equal(optr, "/"))
-      then block(
-        [product],
-        product: 1,
-        num: num(_f),
-        denom: denom(_f),
-        if residue_valid_op_p(num, _z)
-          then product: product * residue_taylor_one_term(num, _z, _a)
-          else product: product * residue_taylor_multi_terms(num, _z, _a),
-        if residue_valid_op_p(denom, _z)
-          then product: product * (1/residue_taylor_one_term(denom, _z, _a))
-          else product: product * (1/residue_taylor_multi_terms(denom, _z, _a)),
-        res: coeff(ratexpand(product), _z-_a, -1)))
+  [res],
+  residue_taylor_hipow: 10,
+  num: num(_f),
+  denom: denom(_f),
+  res: ratexpand(residue_taylor_helper(num, _z, _a)/residue_taylor_helper(denom, _z, _a)),
+  res: coeff(res, _z-_a, -1)
 );
