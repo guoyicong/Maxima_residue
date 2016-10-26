@@ -1,0 +1,47 @@
+f: 1/(z^7+1);
+a: exp(%i*%pi/7);
+residue_m(f, z, a);
+
+f: sin(1/z);
+a: 0;
+residue_m(f, z, a);
+
+f: 1/sin(z);
+a: 2*%pi;
+residue_m(f, z, a);
+
+f: 1/(z-1);
+a: 1;
+residue_m(f, z, a);
+
+f: cos(z)/(z-1)^2/(z+4);
+a: -4;
+residue_m(f, z, a);
+
+f: z*cos(1/z);
+a: 0;
+residue_taylor(f, z, a);
+
+f: cos(z)*sin(1/z);
+a: 0;
+residue_taylor(f, z, a);
+
+f: z^2*sin(1/z);
+a: 0;
+residue_taylor(f, z, a);
+
+f: 1/(1-z)*exp(1/z);
+a: 0;
+residue_taylor(f, z, a);
+
+f: exp(z)*exp(1/z);
+a: 0;
+residue_taylor(f, z, a);
+
+f: 1/(1-z)*exp(1/z^2);
+a: 0;
+residue_taylor(f, z, a);
+
+f: z^2*sin(1/(z-1));
+a: 1;
+residue_taylor(f, z, a);
